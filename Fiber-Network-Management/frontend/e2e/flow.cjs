@@ -1,0 +1,67 @@
+const { chromium } = require('playwright');
+(async () => {
+  const S = process.argv[2] || 'e2e-output'; require('fs').mkdirSync(S + '/shots', { recursive: true });
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  const errors = [];
+  page.on('pageerror', e => errors.push(`[pageerror] ${e.message}`));
+  const B = process.env.FNMS_UI_URL || 'http://127.0.0.1:4173';
+  await page.goto(B);
+  await page.fill('input[autocomplete=username]', 'admin');
+  await page.fill('input[type=password]', 'ChangeMe!2026');
+  await page.click('button.primary');
+  await page.waitForSelector('text=Network dashboard');
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/01-dashboard.png`, fullPage: true });
+  // register a discovered ONT through the wizard
+  await page.goto(B + '/discovered');
+  await page.waitForSelector('tbody tr.clickable');
+  await page.locator('tbody tr.clickable').first().click();
+  await page.waitForSelector('text=Registration');
+  const selects = page.locator('.modal select');
+  await selects.nth(0).selectOption({ index: 1 });
+  await selects.nth(1).selectOption({ index: 1 });
+  await page.screenshot({ path: `${S}/shots/02-register-wizard.png` });
+  await page.click('button:has-text("Validate & create plan")');
+  await page.waitForURL(/provisioning\/jobs\//);
+  await page.waitForSelector('button:has-text("Approve & execute")', { timeout: 30000 });
+  await page.screenshot({ path: `${S}/shots/03-plan-review.png`, fullPage: true });
+  await page.click('button:has-text("Approve & execute")');
+  await page.click('.modal button:has-text("Confirm")');
+  await page.waitForSelector('.page-header .badge:has-text("succeeded")', { timeout: 30000 });
+  await page.screenshot({ path: `${S}/shots/04-job-succeeded.png`, fullPage: true });
+  // ONT page
+  await page.goto(B + '/onts/1');
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/05-ont-detail.png`, fullPage: true });
+  await page.click('.tabs button:has-text("Fiber path")');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${S}/shots/06-ont-path.png` });
+  await page.goto(B + '/olts/1'); await page.click('.tabs button:has-text("Hardware")'); await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${S}/shots/07-olt-hardware.png`, fullPage: true });
+  await page.goto(B + '/fats/2'); await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/08-fat.png`, fullPage: true });
+  await page.goto(B + '/topology'); await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${S}/shots/09-topology.png` });
+  await page.goto(B + '/incidents'); await page.waitForTimeout(1200);
+  await page.locator('tbody tr.clickable').first().click(); await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/10-incident.png`, fullPage: true });
+  await page.goto(B + '/map'); await page.waitForTimeout(1000);
+  const btn = page.locator('button:has-text("Use schematic")'); if (await btn.count()) await btn.click();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${S}/shots/11-map-offline.png` });
+  await page.goto(B + '/integrations'); await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${S}/shots/12-integrations.png`, fullPage: true });
+  // simulator: inject LOS and see alarm
+  await page.goto(B + '/simulator'); await page.waitForSelector('button:has-text("LOS")');
+  await page.locator('button:has-text("LOS")').first().click();
+  await page.waitForTimeout(6000);
+  await page.goto(B + '/alarms'); await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/13-alarms.png`, fullPage: true });
+  // tablet layout
+  await page.setViewportSize({ width: 820, height: 1100 });
+  await page.goto(B + '/'); await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${S}/shots/14-tablet.png` });
+  console.log(errors.length ? errors.join('\n') : 'FLOW OK');
+  await browser.close();
+})();

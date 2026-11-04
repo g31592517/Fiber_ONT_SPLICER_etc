@@ -9,3 +9,4 @@ frontend/dist/
 .env
 backend/.env
 *.log
+e2e-output/

@@ -1,0 +1,15 @@
+# Example systemd unit for a non-Docker install (adjust paths/user).
+[Unit]
+Description=Fiber Network Management API
+After=network.target postgresql.service
+
+[Service]
+User=fnms
+WorkingDirectory=/opt/fnms/backend
+EnvironmentFile=/opt/fnms/backend/.env
+ExecStartPre=/opt/fnms/.venv/bin/alembic upgrade head
+ExecStart=/opt/fnms/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

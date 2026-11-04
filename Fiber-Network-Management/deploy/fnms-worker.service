@@ -1,0 +1,13 @@
+[Unit]
+Description=Fiber Network Management background worker (monitoring + provisioning)
+After=network.target postgresql.service fnms-api.service
+
+[Service]
+User=fnms
+WorkingDirectory=/opt/fnms/backend
+EnvironmentFile=/opt/fnms/backend/.env
+ExecStart=/opt/fnms/.venv/bin/python -m app.jobs.worker
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

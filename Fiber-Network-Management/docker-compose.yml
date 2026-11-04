@@ -1,0 +1,42 @@
+# Standalone deployment: PostgreSQL + API + background worker + web UI.
+# Copy .env.example to .env and set real secrets before starting.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fnms
+      POSTGRES_USER: fnms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fnms -d fnms"]
+      interval: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      FNMS_DATABASE_URL: postgresql+psycopg://fnms:${POSTGRES_PASSWORD}@db:5432/fnms
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.jobs.worker"]
+    env_file: .env
+    environment:
+      FNMS_DATABASE_URL: postgresql+psycopg://fnms:${POSTGRES_PASSWORD}@db:5432/fnms
+    depends_on:
+      api: { condition: service_started }
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    ports: ["8080:80"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  dbdata:

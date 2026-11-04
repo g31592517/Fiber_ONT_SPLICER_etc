@@ -2,7 +2,8 @@ import os
 import tempfile
 
 _tmp = tempfile.mkdtemp(prefix="fnms-test-")
-os.environ["FNMS_DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
+# Set FNMS_TEST_DATABASE_URL to run the suite against PostgreSQL (the database is wiped).
+os.environ["FNMS_DATABASE_URL"] = os.environ.get("FNMS_TEST_DATABASE_URL") or f"sqlite:///{_tmp}/test.db"
 os.environ["FNMS_ENVIRONMENT"] = "test"
 os.environ["FNMS_OPERATION_RATE_LIMIT_PER_MINUTE"] = "10000"
 os.environ["FNMS_LOGIN_RATE_LIMIT_PER_MINUTE"] = "10000"
@@ -18,7 +19,10 @@ from app.jobs.queue import run_pending  # noqa: E402
 
 @pytest.fixture(scope="session", autouse=True)
 def seeded():
-    seed.migrate()
+    if os.environ.get("FNMS_TEST_DATABASE_URL"):
+        seed.reset(SessionLocal())
+    else:
+        seed.migrate()
     db = SessionLocal()
     seed.seed_reference(db)
     seed.seed_demo(db)

@@ -83,6 +83,8 @@ def build_graph(db: Session, *, site_id=None, olt_id=None, pon_port_id=None, fat
         nodes[f"olt:{o.id}"] = {"id": f"olt:{o.id}", "type": "olt", "label": o.name, "status": o.connection_status,
                                 "site_id": o.site_id, "olt_id": o.id, "ref_id": o.id, "simulated": o.is_simulated}
     for p in ports:
+        if f"pon:{p.id}" not in used_ports:
+            continue  # unused PON ports carry no topology; they are listed on the OLT/PON pages instead
         nodes[f"pon:{p.id}"] = {"id": f"pon:{p.id}", "type": "pon_port", "label": f"PON {p.fsp}", "status": p.oper_status,
                                 "olt_id": p.olt_id, "site_id": p.olt.site_id if p.olt else None, "ref_id": p.id}
     for s in db.scalars(select(Splitter)):

@@ -14,8 +14,8 @@ _SECRET_PATTERNS = [
 
 
 def scrub(text: str) -> str:
-    text = _SECRET_PATTERNS[0].sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
-    return _SECRET_PATTERNS[1].sub("Bearer ***", text)
+    text = _SECRET_PATTERNS[1].sub("Bearer ***", text)
+    return _SECRET_PATTERNS[0].sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
 
 
 class JsonFormatter(logging.Formatter):

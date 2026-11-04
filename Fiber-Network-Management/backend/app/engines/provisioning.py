@@ -428,13 +428,19 @@ def validate(db: Session, job: ProvisioningJob) -> None:
 def _dry_run(db: Session, job: ProvisioningJob, olt: Olt, plan: list[dict]) -> list[dict]:
     """Ask the device to validate the first write step(s). Only steps whose inputs are already known are dry-run."""
     out = []
+    changed_before = False
     with build_adapter(olt) as adapter:
         for s in plan:
             p = s["params"]
-            if any(v == "$ont_index" or (isinstance(v, str) and v.startswith("$")) for v in p.values()):
-                out.append({"seq": s["seq"], "action": s["action"], "status": "deferred",
-                            "message": "Depends on an earlier step's result; validated at execution"})
+            if s["action"].startswith("verify"):
                 continue
+            if changed_before or any(isinstance(v, str) and v.startswith("$") for v in p.values()):
+                # The device state this step will see depends on earlier steps; a dry run now would be meaningless.
+                out.append({"seq": s["seq"], "action": s["action"], "status": "deferred",
+                            "message": "Depends on earlier steps; validated by the device at execution"})
+                changed_before = True
+                continue
+            changed_before = True
             try:
                 if s["action"] == "register_ont":
                     r = adapter.register_ont(_registration(job, p), dry_run=True)
@@ -628,7 +634,8 @@ def execute(db: Session, job: ProvisioningJob) -> dict:
                 params = _resolve(raw.get("params", {}), ctx)
                 out = _run_action(adapter, job, step.action, params, ctx)
                 step.output = redact(out)
-                step.state = StepState.SUCCEEDED if out.get("changed", True) else StepState.SKIPPED
+                verify = step.action.startswith("verify")
+                step.state = StepState.SUCCEEDED if (verify or out.get("changed", True)) else StepState.SKIPPED
                 if step.state == StepState.SKIPPED:
                     _event(db, job, f"Step {step.seq} ({step.action}) skipped: device already in desired state")
                 if raw.get("compensation"):
@@ -654,7 +661,7 @@ def execute(db: Session, job: ProvisioningJob) -> dict:
             _transition(db, job, PS.SUCCEEDED, message="All steps succeeded and the result was verified on the device")
         else:
             job.error = failure
-            changed_steps = [s for s in done if s.state == StepState.SUCCEEDED]
+            changed_steps = [s for s in done if s.state == StepState.SUCCEEDED and not s.action.startswith("verify")]
             if comm_lost:
                 _transition(db, job, PS.FAILED, message="Communication with the OLT was lost during execution. "
                             "Manual verification required; no automatic compensation was attempted.")
@@ -671,7 +678,7 @@ def execute(db: Session, job: ProvisioningJob) -> dict:
     job.result = redact({k: v for k, v in ctx.items()})
     if svc:
         svc.last_job_id = job.id
-        if job.state == PS.FAILED and job.operation == Op.ACTIVATE_SERVICE and svc.status == ServiceStatus.PENDING:
+        if job.state in (PS.FAILED, PS.ROLLED_BACK) and job.operation == Op.ACTIVATE_SERVICE and svc.status == ServiceStatus.PENDING:
             svc.status = ServiceStatus.FAILED
     audit(db, Actor(None, job.approved_by or "system"), f"provisioning.{job.operation}", "provisioning_job", job.id,
           f"{job.operation} {job.state}", {"error": job.error}, outcome="success" if job.state == PS.SUCCEEDED else "failure")

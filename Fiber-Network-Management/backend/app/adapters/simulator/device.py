@@ -107,8 +107,16 @@ def device_state(host: str, write: bool = False):
         if dev is None:
             raise LookupError(f"No simulated device at host '{host}'")
         state = copy.deepcopy(dev.state)
-        yield state
+        try:
+            yield state
+        except Exception:
+            # Fault injection consumes its counter even though the operation fails.
+            if write and state.pop("_commit_on_error", False):
+                dev.state = state
+                db.commit()
+            raise
         if write:
+            state.pop("_commit_on_error", None)
             dev.state = state
             db.commit()
     finally:

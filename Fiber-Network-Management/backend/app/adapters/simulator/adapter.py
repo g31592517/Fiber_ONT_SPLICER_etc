@@ -69,6 +69,7 @@ class SimulatorAdapter(VendorAdapter):
         remaining = st.get("fail_next", {}).get(op, 0)
         if remaining > 0:
             st["fail_next"][op] = remaining - 1
+            st["_commit_on_error"] = True
             raise AdapterError(f"Simulated device rejected '{op}' (injected failure)", retryable=False)
 
     @staticmethod

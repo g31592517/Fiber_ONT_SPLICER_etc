@@ -109,5 +109,6 @@ def transition(db: Session, alarm: Alarm, action: str, actor: str, note: str = "
         alarm.resolved_by = None
         alarm.acknowledged = False
     alarm.state = target
-    db.add(AlarmEvent(alarm=alarm, action=action if action != "resolve" else "resolved", actor=actor, note=note))
+    past = {"acknowledge": "acknowledged", "investigate": "investigating", "resolve": "resolved", "reopen": "reopened"}
+    db.add(AlarmEvent(alarm=alarm, action=past[action], actor=actor, note=note))
     return alarm
